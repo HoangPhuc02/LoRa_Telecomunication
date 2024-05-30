@@ -6,7 +6,7 @@
 # endif()
 
 idf_component_register(
-    SRCS "UART.cpp"
+    SRCS "UpdateManager.cpp" "UART.cpp"
     INCLUDE_DIRS "include"
     REQUIRES driver
 )

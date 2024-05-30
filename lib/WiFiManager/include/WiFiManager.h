@@ -2,37 +2,26 @@
 #define __WIFI_MANAGER_LIB_H
 /** UART config*/
 /*Pin */
-#include <Arduino.h>
+#include <ProjectConfig.h>
 #include <WiFi.h>
-#include <String.h>
-
 // #include <FirebaseClient.h>
 
 #include <FirebaseESP32.h>
 #include <HTTPClient.h>
-#include <ProjectConfig.h>
 
 
-
-
-
-
-
-
-
-
-
+typedef void (*UARTDataSendFunc)(char*, uint32_t); 
 
 class WiFiManager {
 public:
     WiFiManager(const char* ssid, const char* password );
 
-
     void begin() ;
 
     bool isConnected() ;
-
+    void setOnDisconnectCallback(UARTDataSendFunc callback);
 private:
+    UARTDataSendFunc onDisconnectCallback;
     const char* _ssid;
     const char* _password;
 

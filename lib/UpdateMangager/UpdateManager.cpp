@@ -21,7 +21,7 @@ UpdateManager::UpdateManager(UARTManager& uartManager, const char* spiffsFilePat
     : uartManager(uartManager), SPIFFSFilePath(spiffsFilePath), firebaseManager(firebaseManager), spiffsManager(spiffsManager) {}
 
 void UpdateManager::init() {
-    xTaskCreate(updateTask, "update_task", 8192, this, configMAX_PRIORITIES, 0);
+    xTaskCreate(updateTask, "update_task", 8192, this, UPDATE_TASK_LOOP_PRIORITY , UPDATE_TASK_LOOP_CORE);
 }
 
 void UpdateManager::updateTask(void* pvParameters) {
@@ -41,26 +41,7 @@ void UpdateManager::loop() {
             if (firebaseManager.checkForFirmwareUpdate()) {
                 startFlashSw();
             }
-            else if (uartManager.updateDatatoFB == true)
-            {
-                
-                Serial.println("go to function");
-                String data = (String(uartManager.rxBuffer)).substring(0,uartManager.rxBufferSize);
-                
-                Serial.println(data);
-
-                xTaskNotifyGive(firebaseManager.firebaseUploadTaskHandle); 
-                while (true) {
-                    if (xQueueSend(firebaseManager.firebaseDataQueue, &data, portMAX_DELAY) != pdPASS) {
-                        Serial.println("Failed to send buffer to queue!");
-                    } else {
-                        break;
-                    }
-                } 
-
-                uartManager.updateDatatoFB = false;
-
-            }
+            
             break;
         case NEW_UPDATE_REQUEST_MODE:
             Serial.println("NEW_UPDATE_REQUEST_MODE");
@@ -93,7 +74,7 @@ void UpdateManager::waitStmAcpHeader()
     // strcpy(uartManager.command , "");
     // strcpy(uartManager.command, (char*) HEADER_FLAG_RECEIVED_MODE);
 
-    if(uartManager.waitForCommandHex( HEADER_FLAG_RECEIVED_MODE))
+    if(uartManager.waitForCommandHex( HEADER_FLAG_RECEIVED_MODE,0))
     {
         Serial.println("HEADER_FLAG_RECEIVED_SUCCESS");
         mode = ESP_SEND_NEXT_PACKET_MODE;
@@ -121,7 +102,7 @@ void UpdateManager::waitStmAcpUpdateReq() {
     // strcpy(uartManager.command , "");
     // strcpy(uartManager.command, NEW_UPDATE_REQUEST_ACCEPT);
 
-    if(uartManager.waitForCommandHex( NEW_UPDATE_REQUEST_ACCEPT_MODE))
+    if(uartManager.waitForCommandHex( NEW_UPDATE_REQUEST_ACCEPT_MODE,0) == RECEIVE_SUCCESS)
     {
         Serial.println("NEW_UPDATE_REQUEST_ACCEPT_MODE");
         mode = ESP_SEND_HEADER_FLAG;
@@ -134,6 +115,7 @@ void UpdateManager::waitStmAcpUpdateReq() {
 void UpdateManager::startFlashSw() {
     
     file = spiffsManager.openFile(localFilePath,"r");
+    Serial.printf("Size of packet: %d",file.size());
     QueueBufferItem_t queueItem;
     // memcpy(queueItem.data, (char*)NEW_UPDATE_REQUEST, sizeof(NEW_UPDATE_REQUEST));
     // queueItem.dataLength = sizeof(NEW_UPDATE_REQUEST);
@@ -148,24 +130,24 @@ void UpdateManager::startFlashSw() {
             break;
         }
     }
-    firebaseManager.updateFirmwareStatus("FW Update requested");
+    Serial.println("Update requested");
     mode = NEW_UPDATE_REQUEST_MODE;
 }
 
 void UpdateManager::sendHeaderFile() {
     //uint8_t header[HEADER_SIZE];  // Assuming HEADER_SIZE is defined appropriately
     // Fill header with header data... 
-
-    QueueBufferItem_t queueItem;
-    memcpy(queueItem.data, firebaseManager.header, HEADER_SIZE);
-    queueItem.dataLength = HEADER_SIZE;
-    while (true) {
-        if (xQueueSend(uartManager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS) {
-            Serial.println("Failed to send buffer to queue!");
-        } else {
-            break;
-        }
-    }
+    uartManager.sendDataToUARTTx(firebaseManager.header, HEADER_SIZE );
+    // QueueBufferItem_t queueItem;
+    // memcpy(queueItem.data, firebaseManager.header, HEADER_SIZE);
+    // queueItem.dataLength = HEADER_SIZE;
+    // while (true) {
+    //     if (xQueueSend(uartManager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS) {
+    //         Serial.println("Failed to send buffer to queue!");
+    //     } else {
+    //         break;
+    //     }
+    // }
     mode = HEADER_FLAG_RECEIVED_MODE;
 }
 
@@ -174,7 +156,7 @@ void UpdateManager::startSendFw() {
     
     
     transferFile(localFilePath);
-    firebaseManager.updateFirmwareStatus("Update complete");
+    Serial.println("Update complete");
 }
 
 void UpdateManager::transferFile(const char* filename) {
@@ -185,35 +167,39 @@ void UpdateManager::transferFile(const char* filename) {
 
     // strcpy(uartManager.command , "");
     // strcpy(uartManager.command, (char*)MASTER_ACCEPT_PACKET_MODE);
-    if(uartManager.waitForCommandHex(ESP_SEND_NEXT_PACKET_MODE) == RECEIVE_TIME_OUT)
-        startFlashSw();
+    uartManager.waitForCommandHex(ESP_SEND_NEXT_PACKET_MODE,0,DISABLE_TIME_OUT);
+
+    //startFlashSw();
     int filesize = file.size();
     uint8_t cnt = 0;
+    Serial.printf("Size of packet: %d",filesize);
     while (file.read(buffer, BUFFER_SIZE) > 0) {
         filesize-=BUFFER_SIZE;
-        
+        Serial.printf("Sending packet number: %d",cnt++);  
         memcpy(queueItem.data, buffer, BUFFER_SIZE);
         queueItem.dataLength = BUFFER_SIZE;
 
         if (xQueueSend(uartManager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS) {
             Serial.println("Failed to send buffer to queue!");
         }
-        if(filesize < 0) 
+        if(filesize <= 0) 
         {
             // strcpy(uartManager.command , "");
             // strcpy(uartManager.command, (char*)MASTER_RECEIVE_ALL_MODE);
-            uartManager.waitForCommandHex( MASTER_RECEIVE_ALL_MODE,DISABLE_TIME_OUT);
-
+            Serial.println("Received all packets");
+            uartManager.waitForCommandHex( MASTER_RECEIVE_ALL_MODE,0,DISABLE_TIME_OUT);
+            break;
         }
         else 
         {
-            while(uartManager.waitForCommandHex(MASTER_ACCEPT_PACKET_MODE) == RECEIVE_TIME_OUT)
+            while(uartManager.waitForCommandHex(MASTER_ACCEPT_PACKET_MODE,0) == RECEIVE_TIME_OUT)
             {
                 xQueueSend(uartManager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS ;        
             }
         }
-        Serial.println(cnt);   
+         
     }
+    
     firebaseManager.setDownloadCompleteAndReadyToFlash( false);
     file.close();
     Serial.println("\nEnd of file.");
@@ -222,6 +208,19 @@ void UpdateManager::transferFile(const char* filename) {
 
 void UpdateManager::waitStmOTADone()
 {
-    uartManager.waitForCommandHex(DONE_OTA_MODE,DISABLE_TIME_OUT) ;
+    Serial.println("wait ota hex code");
+               
+    uartManager.waitForCommandHex(DONE_OTA_MODE,FAIL_OTA_MODE,DISABLE_TIME_OUT,2000) ;
+
+    
+    // Serial.println("before update firebase");
+    // firebaseManager.updateStringFB(firebaseManager.fbdo2,"done",VARIABLE_PATH);
+    // Serial.println("after update firebase");
+    if(uartManager.command[0] ==  0)
+    xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusDone,eSetValueWithOverwrite); 
+    else if(uartManager.command[1] == 0)
+    xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusFail,eSetValueWithOverwrite); 
+    
+    
     mode = STATE_IDLE;
 }

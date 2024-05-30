@@ -1,30 +1,10 @@
 #ifndef __UPDATE_MANAGER_H
 #define __UPDATE_MANAGER_H
 
+#include<ProjectConfig.h>
 #include "UARTManager.h" // Use double quotes for local files
 #include "FirebaseManager.h"
-// #include "SPIFFS_FB.h" 
-#include <Arduino.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-
-
-
-#include<ProjectConfig.h>
-/*ESP To GATEWAY NOTIFY NEW FIRMWARE */
-
-
-
-
-
-
-
-// byte mode = 0;
-// bool ACP_KEY_RX = false;
-
-
-
+#include "SPIFFS_FB.h" 
 
 
 class UpdateManager{
@@ -53,6 +33,8 @@ private:
     SPIFFSManager& spiffsManager;
     const char* SPIFFSFilePath;
     uint8_t mode = STATE_IDLE;
+    //uint8_t mode = NEW_UPDATE_REQUEST_MODE;
+    //uint8_t mode = DONE_OTA_MODE;
     bool ACP_KEY_RX = false;
 
     static void updateTask(void* pvParameters);

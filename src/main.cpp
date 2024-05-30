@@ -76,9 +76,9 @@
 
 
 SPIFFSManager spiffs_manager;
-WiFiManager wifi_manager(WIFI_SSID,WIFI_PASSWORD);
+WiFiManager wifi_manager( WIFI_SSID,WIFI_PASSWORD);
 FirebaseManager fb_manager(wifi_manager,spiffs_manager);
-UARTManager uart_manager(UART);
+UARTManager uart_manager(fb_manager,UART);
 UpdateManager update_manager(uart_manager, "/firmware.bin", fb_manager, spiffs_manager);
 // firebaseLib fblib;
 // UARTInterrupt uart(UART_NUM_1, 16, 17);
@@ -100,23 +100,27 @@ void setup() {
   // uartHandler.transmit((const uint8_t*)message, strlen(message));
   uart_manager.init(); 
   spiffs_manager.begin();
+  wifi_manager.setOnDisconnectCallback(&UARTManager::sendDataToUARTTx);
   wifi_manager.begin();
+ 
+  //if(!wifi_manager.isConnected())  uart_manager.sendDataToUARTRTx(&x,1 );
   while(!wifi_manager.isConnected());
-
+  
  // FirebaseManager.downloadVersion()
-  QueueBufferItem_t queueItem;
-    memcpy(queueItem.data, "WIFI CONNECTED", 15);
-    queueItem.dataLength = 15;
+  // QueueBufferItem_t queueItem;
+  //   memcpy(queueItem.data, "WIFI CONNECTED", 15);
+  //   queueItem.dataLength = 15;
 
 
 
-    if (xQueueSend(uart_manager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS) {
-        Serial.println("Failed to send buffer to queue!");
-    }
+  //   if (xQueueSend(uart_manager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS) {
+  //       Serial.println("Failed to send buffer to queue!");
+  //   }
   
   fb_manager.begin();
   update_manager.init();
   fb_manager.startMonitoringVariable();
+  //vTaskSuspend(fb_manager.firebaseStreamTaskHandle);  
 
 
   

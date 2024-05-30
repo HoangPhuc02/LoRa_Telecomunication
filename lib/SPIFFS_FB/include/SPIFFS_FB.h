@@ -2,17 +2,17 @@
 #define __SPIFFS_FB_H
 /** UART config*/
 /*Pin */
-#include <Arduino.h>
+#include <ProjectConfig.h>
+
 #include <FS.h>
 #include <WiFi.h>
 #include <FirebaseESP32.h>
 #include "SPIFFS.h"
 #include <HTTPClient.h>
 #include <WiFiClient.h>
-#include <vector> 
-#include <string.h>
 
-#include <ProjectConfig.h>
+
+
 
 
 bool setupSPIFFS();

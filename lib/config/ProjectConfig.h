@@ -1,7 +1,61 @@
-#define BINH_WIFI
-// #define UART_REPLACE
+#ifndef __PROJECT_CONFIG_H
+#define __PROJECT_CONFIG_H
+#define BINH_WIFI 
+#define UART_REPLACE 
 
 
+#include <Arduino.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include <string.h>
+#include <cstdlib>
+#include <string>
+#include <vector> 
+#include <cstring>
+/* ================================Task RTOS Manager==================================== */
+/* OLD DEFINE */
+// #define RX_TASK_PRIORITY configMAX_PRIORITIES - 2
+// #define TX_TASK_PRIORITY configMAX_PRIORITIES - 3
+// #define UPDATE_TASK_LOOP_PRIORITY configMAX_PRIORITIES
+// #define FB_MONITOR_VALUE_PRORITY  1
+// #define FB_UPLOAD_FIRMWARE_PRIORITY 1
+// #define FB_UPLOAD_DATA_PRIORITY configMAX_PRIORITIES - 1,
+
+// /* core*/
+// /* UPDATE MANAGER*/
+// #define UPDATE_TASK_LOOP_CORE 0
+
+// /*UART MANAGER*/
+// #define RX_TASK_CORE 0
+// #define TX_TASK_CORE 0
+
+// /* FIREBASE MANAGER*/
+// #define FB_MONITOR_VALUE_CORE 1
+// #define FB_UPLOAD_FIRMWARE_CORE 1
+// #define FB_UPLOAD_DATA_CORE 1
+
+/* NEW DEFINE */
+
+#define RX_TASK_PRIORITY configMAX_PRIORITIES
+#define TX_TASK_PRIORITY configMAX_PRIORITIES - 5
+#define UPDATE_TASK_LOOP_PRIORITY configMAX_PRIORITIES - 1
+#define FB_MONITOR_VALUE_PRORITY configMAX_PRIORITIES - 4
+#define FB_UPLOAD_FIRMWARE_PRIORITY configMAX_PRIORITIES -3
+#define FB_UPLOAD_DATA_PRIORITY configMAX_PRIORITIES - 2
+
+/* core*/
+/* UPDATE MANAGER*/
+#define UPDATE_TASK_LOOP_CORE 0
+
+/*UART MANAGER*/
+#define RX_TASK_CORE 0
+#define TX_TASK_CORE 0
+
+/* FIREBASE MANAGER*/
+#define FB_MONITOR_VALUE_CORE 1
+#define FB_UPLOAD_FIRMWARE_CORE 1
+#define FB_UPLOAD_DATA_CORE 1
 /* =================================UART Manager config================================= */
 
 
@@ -11,8 +65,8 @@
 #define TXD_PIN 1
 #define RXD_PIN 3
 
-#define TXD0_PIN 4
-#define RXD0_PIN 2
+#define TXD0_PIN 5
+#define RXD0_PIN 18
 
 
 #else 
@@ -64,6 +118,9 @@
 #else
     #define WIFI_SSID "PP"
     #define WIFI_PASSWORD "phucphuc"
+
+    // #define WIFI_SSID "SIX TRET"
+    // #define WIFI_PASSWORD "chaokhub"
 #endif
 
 /* ===================================================================================== */
@@ -143,7 +200,8 @@
 #define ESP_SEND_NEXT_PACKET  		"ESP_SEND_NEXT_PACKET"
 #define ESP_SEND_NEXT_PACKET_MODE  		0x0AU
 
-#define DONE_OTA_MODE               0xFC
+#define DONE_OTA_MODE               0x7B
+#define FAIL_OTA_MODE               0xFB
 /*CONFIRM DOWNLOADING DONE*/
 #define ESP_DOWNLOAD_DONE    		"ESP_DOWNLOAD_DONE"
 #define PACKET_1024bytes	 		1024U
@@ -153,5 +211,5 @@
 #define HEADER_CONFIG_SIZE 	 		16U
 
 /* ===================================================================================== */
-
+#endif
 

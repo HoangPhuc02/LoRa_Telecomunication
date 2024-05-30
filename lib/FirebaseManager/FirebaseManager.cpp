@@ -14,8 +14,13 @@
     void FirebaseManager::begin() {
         // Serial.println("begin success");
         firebase_init();
+        firebaseSemaphore = xSemaphoreCreateBinary();
+        xSemaphoreGive(firebaseSemaphore);
 
-        firebaseDataQueue = xQueueCreate(5, sizeof(String));
+        firebaseStreamTaskHandle        = NULL; 
+        firebaseDownloadFWTaskHandle    = NULL;  
+        firebaseUploadTaskHandle = NULL; 
+        firebaseDataQueue = xQueueCreate(5, sizeof(QueueUploadData_t));
         handleUploadData();
         // startMonitoringVariable();
     }
@@ -31,19 +36,16 @@
         }
     } else {
         // Check for specific error reasons
-        if (fbdo.httpCode() == FIREBASE_ERROR_HTTP_CODE_OK) {
-            Serial.println("ERROR: Firebase get operation failed. Error reason: " + fbdo.errorReason());
+        if (fbdo1.httpCode() == FIREBASE_ERROR_HTTP_CODE_OK) {
+            Serial.println("ERROR: Firebase get operation failed. Error reason: " + fbdo1.errorReason());
         } else {
-            Serial.println("ERROR: HTTP error code: " + String(fbdo.httpCode()));
+            Serial.println("ERROR: HTTP error code: " + String(fbdo1.httpCode()));
         }
     }
     return "";
 }
 
-    void FirebaseManager::startMonitoringVariable() {
-        Serial.println("startMonitoringVariable");
-        xTaskCreatePinnedToCore(streamTask, "streamTask", 8192, this, 1, NULL, 1);
-    }
+
 
 
 void FirebaseManager::firebase_init()
@@ -69,7 +71,7 @@ void FirebaseManager::firebase_init()
     // Large data transmission may require larger RX buffer, otherwise connection issue or data read time out can be occurred.
     fbdo.setBSSLBufferSize(4096 /* Rx buffer size in bytes from 512 - 16384 */, 1024 /* Tx buffer size in bytes from 512 - 16384 */);
     fbdo1.setBSSLBufferSize(4096 /* Rx buffer size in bytes from 512 - 16384 */, 1024 /* Tx buffer size in bytes from 512 - 16384 */);
-
+    fbdo2.setBSSLBufferSize(4096 /* Rx buffer size in bytes from 512 - 16384 */, 2048 /* Tx buffer size in bytes from 512 - 16384 */);
     Firebase.begin(&config, &auth);
     // Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
     Firebase.reconnectWiFi(true);
@@ -81,6 +83,11 @@ SPIFFSManager& FirebaseManager::getSPIFFSManager() { return _spiffsManager; }
 
 WiFiManager& FirebaseManager::getWiFiManager() {return _wifiManager;}
 
+
+void FirebaseManager::startMonitoringVariable() {
+    Serial.println("startMonitoringVariable");
+    xTaskCreatePinnedToCore(streamTask, "streamTask", 8192, this, FB_MONITOR_VALUE_PRORITY, &firebaseStreamTaskHandle, FB_MONITOR_VALUE_CORE);
+}
 
 bool FirebaseManager::checkForFirmwareUpdate() {return downloadCompleteAndReadyToFlash;}
 /* Private fucntion*/
@@ -115,46 +122,85 @@ void FirebaseManager::streamTask(void* pvParameters) {
 void FirebaseManager::handleStreamData(FirebaseData& fbdo) {
     if (fbdo.dataType() == "string" && fbdo.stringData() == START_UPDATE_FB_STATUS) {
         Serial.println("Variable changed to true. Starting firmware update...");
-        getHeaderFrame();
+         // Suspend the task
+        
+        
         xTaskCreatePinnedToCore(
             updateFirmwareTask,
             "updateFirmwareTask",  
             8192,                  
             this,                 // Pass the FirebaseManager instance to the task
-            1,                     
-            NULL,                  
-            1);                    
+            FB_UPLOAD_FIRMWARE_PRIORITY,                     
+            &firebaseDownloadFWTaskHandle,                  
+            FB_UPLOAD_FIRMWARE_CORE);  
+
+                        
     }
 }
 
 void FirebaseManager::handleUploadData()
 {
-    firebaseUploadTaskHandle = NULL; 
+    
     xTaskCreatePinnedToCore(
     firebaseUploadTask,     /* Task function. */
     "firebaseUploadTask",   /* String with name of task. */
     10000,                  /* Stack size in bytes. */
     this,                   /* Parameter passed as input of the task */
-    configMAX_PRIORITIES - 1,                      /* Priority of the task. */
+    FB_UPLOAD_DATA_PRIORITY ,                      /* Priority of the task. */
     &firebaseUploadTaskHandle, /* Task handle to keep track of created task */
-    1);                     /* Pin task to core 1 */
+    FB_UPLOAD_DATA_CORE);                     /* Pin task to core 1 */
 }
 
 void FirebaseManager::firebaseUploadTask(void *pvParameters) {
     FirebaseManager* manager = static_cast<FirebaseManager*>(pvParameters);
+    uint32_t ulNotifiedValue;
     while (1) {
         // 1. Wait for Notification
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait indefinitely for a notification
+        //ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Wait indefinitely for a notification
+        if(xTaskNotifyWait(0, 0, &ulNotifiedValue, portMAX_DELAY) == pdPASS)
+        { 
+            // 2. Get Data from Queue (Optional)
+            // You might have a queue to pass data from other tasks to this one.
+            // Here's a basic example (you'll need to create and manage the queue):
+            if (xSemaphoreTake(manager->firebaseSemaphore, portMAX_DELAY) == pdTRUE) {
 
-        // 2. Get Data from Queue (Optional)
-        // You might have a queue to pass data from other tasks to this one.
-        // Here's a basic example (you'll need to create and manage the queue):
 
-        String data;
-        if (xQueueReceive(manager->firebaseDataQueue, &data, portMAX_DELAY) == pdPASS) {
-            // Data received, process it...
-            uploadDataSensor((const char*)data.c_str(),manager->fbdo1);
+                if (ulNotifiedValue == UpdateStatusDone) {
+                    
+                    if (Firebase.setString(manager->fbdo2, VARIABLE_PATH, "done")) {
+                        Serial.println("Firebase update status to done successful!");
+                        vTaskResume(manager->firebaseStreamTaskHandle);
+                    } else {
+                        Serial.printf("Firebase update failed: %s\n", (manager->fbdo2).errorReason().c_str());
+
+                    }
+                }
+                else if (ulNotifiedValue == UpdateStatusFail) {
+                    
+                    if (Firebase.setString(manager->fbdo2, VARIABLE_PATH, "fail")) {
+                        Serial.println("Firebase update status to fail successful!");
+                        vTaskResume(manager->firebaseStreamTaskHandle);
+                    } else {
+                        Serial.printf("Firebase update failed: %s\n", (manager->fbdo2).errorReason().c_str());
+
+                    }
+                }
+                // Handle UpdateStatus notification
+                else if (ulNotifiedValue == SensorData) {
+                    // Handle SensorData notification
+                    QueueUploadData_t queueUpload;
+                    if (xQueueReceive(manager->firebaseDataQueue, &queueUpload, portMAX_DELAY) == pdPASS) {
+                        // Data received, process it...
+                
+                        uploadDataSensor(queueUpload.type, queueUpload.path,(const char*)queueUpload.data.c_str(),manager->fbdo2);
+                        //Serial.println("Update success");
+                    }
+                }
+                
+                xSemaphoreGive(manager->firebaseSemaphore);
+            }
         }
+        //vTaskDelay(20 / portTICK_PERIOD_MS);
 
         // 3. Perform Firebase Upload
         // Call your uploadDataSensor function here with the received data.
@@ -165,41 +211,48 @@ void FirebaseManager::firebaseUploadTask(void *pvParameters) {
 }
     // Task function to handle firmware update
 void FirebaseManager::updateFirmwareTask(void* pvParameters) {
-        FirebaseManager* manager = static_cast<FirebaseManager*>(pvParameters);
-        SPIFFSManager& spiffsManager = manager->getSPIFFSManager();
-        // Serial.println(spiffsManager.isInitialized());
-        String downloadURL = manager->getDownloadURLFromFirebase(); 
-        if (!spiffsManager.isInitialized()) {
-            Serial.println("SPIFFS is not initialized. Cannot download firmware.");
-            vTaskDelete(NULL); // Exit task if SPIFFS failed
-            return;
-        }
-
-
-        if (!downloadURL.isEmpty()) {
-            int fileLength = 0; // Not used in this case, as downloadFile handles it internally
-
-            // Use SPIFFSManager to download and save the file
-            if (spiffsManager.downloadFile(downloadURL, localFilePath)) {
-                Serial.println("Firmware update downloaded successfully!");
-                // transferFile(localFilePath); // Start firmware update process
-                // spiffsManager.readFile(localFilePath);
-                manager->downloadCompleteAndReadyToFlash = true;
-                Firebase.setString(manager->fbdo1, F("/Firmware/update_status"), F("false"));
-                //write success
-            } else {
-                Serial.println("Firmware download failed.");
-            }
-        } else {
-            Serial.println("Error getting download URL.");
-        }
-        vTaskDelete(NULL);
-    }
-
-void FirebaseManager::updateFirmwareStatus(const char* status)
+    FirebaseManager* manager = static_cast<FirebaseManager*>(pvParameters);
+    SPIFFSManager& spiffsManager = manager->getSPIFFSManager();
+    vTaskSuspend(manager->firebaseStreamTaskHandle);  
+    while(true)
     {
-        Serial.println(status);
+        if (xSemaphoreTake(manager->firebaseSemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            manager->getHeaderFrame(manager->fbdo1);
+            // Serial.println(spiffsManager.isInitialized());
+            Serial.println("Start Update FW Task");
+            String downloadURL = manager->getDownloadURLFromFirebase(); 
+            if (!spiffsManager.isInitialized()) {
+                Serial.println("SPIFFS is not initialized. Cannot download firmware.");
+                vTaskDelete(NULL); // Exit task if SPIFFS failed
+                return;
+            }
+
+
+            if (!downloadURL.isEmpty()) {
+                int fileLength = 0; // Not used in this case, as downloadFile handles it internally
+                Serial.println("Start Update FW Task");
+                // Use SPIFFSManager to download and save the file
+                if (spiffsManager.downloadFile(downloadURL, localFilePath)) {
+                    Serial.println("Firmware update downloaded successfully!");
+                    // transferFile(localFilePath); // Start firmware update process
+                    // spiffsManager.readFile(localFilePath);
+                    manager->downloadCompleteAndReadyToFlash = true;
+                    Firebase.setString(manager->fbdo1, F("/Firmware/update_status"), F("updating"));
+                    //write success
+                } else {
+                    Serial.println("Firmware download failed.");
+                }
+            } else {
+                Serial.println("Error getting download URL.");
+            }
+            xSemaphoreGive(manager->firebaseSemaphore);
+            vTaskDelete(NULL);
+        }
     }
+}
+
+
 bool FirebaseManager::setDownloadCompleteAndReadyToFlash(bool state)
     {
         downloadCompleteAndReadyToFlash = state;
@@ -207,170 +260,118 @@ bool FirebaseManager::setDownloadCompleteAndReadyToFlash(bool state)
     }
     
     
-String FirebaseManager::parseStringValue(FirebaseJson &json, const String &path, const String &targetType ) 
-    {
-        FirebaseJsonData result;
-        if (json.get(result, path) && result.success) {
-            
-            if (targetType == "string" && result.type == "string") {
-            return result.to<String>();
-            } else if (targetType == "json") {
-            return result.to<String>(); // Return the JSON object as a string
-            }
-        }
-        return "null"; // Or another error indicator value if parsing fails
-    }
 
-int FirebaseManager::parseIntValue(FirebaseJson &json, const String &path) 
-    {
-        FirebaseJsonData result;
-        // if (json.get(result, path) && result.success) {
-        //     return result.to<int>();
-        // }
-        // return ; // Or another error indicator value if parsing fails
-        json.get(result, path);
-        return result.to<int>();
-    }
 
-void FirebaseManager::downloadJson(const String &path)
-    {
-        memset(header, 0, sizeof(header)); 
-        FirebaseJson json;
-        // FirebaseJsonData result;
-        TickType_t ticks = xTaskGetTickCount();
-        if(Firebase.getJSON(fbdo1,headerFirebaseFilePath,&json))
-        {
-            
-            char byteString[2] ;
-            uint8_t cnt = 0;
-            uint32_t codesize = 0;
-            String NodeID = parseStringValue(json,"/node_id");
-            for(uint8_t i = 0; i < 4; i++)
-            {
-                strcpy(byteString,(char*)NodeID.substring(i*2, i*2+2).c_str());
-                header[cnt++] = x2i(byteString);
-            }
-            header[cnt++] = ESP_SEND_HEADER_FLAG;
-            codesize = parseIntValue(json,"/Codesize");
-            for(uint8_t i = 0; i < 4; i++)
-            {
-                header[cnt++] = codesize%100;
-                codesize /=100;
-            }
-            header[cnt++] = parseIntValue(json,"/Appvermain");
-            header[cnt++] = parseIntValue(json,"/Appversub") ;
-            header[cnt++] = parseIntValue(json,"/BW") ;
-            header[cnt++] = parseIntValue(json,"/SF") ;
-            header[cnt++] = parseIntValue(json,"/CR") ;
-            // Serial.println(header);
-        }
-        else
-        {
-            // Check for specific error reasons
-            if (fbdo.httpCode() == FIREBASE_ERROR_HTTP_CODE_OK)
-            {
-                Serial.println("ERROR: Firebase get operation failed. Error reason: " + fbdo.errorReason());
-            }
-            else
-            {
-                Serial.println("ERROR: HTTP error code: " + String(fbdo.httpCode()));
-            }
-        }
-        Serial.print("Get header 1: ");
-        Serial.println(ticks - xTaskGetTickCount());
-    }
-
-bool FirebaseManager::getHeaderFrame()
+bool FirebaseManager::getHeaderFrame(FirebaseData &fbdo)
 {
+    Serial.println("Start Get Header");
     memset(header, 0, sizeof(header)); 
-    TickType_t ticks = xTaskGetTickCount();
-    Firebase.getString(fbdo1, "/Firmware/node_id") ;
+    // TickType_t ticks = xTaskGetTickCount();
+    Firebase.getString(fbdo, "/Firmware/node_id") ;
     char byteString[2] ;
     uint8_t cnt = 0;
     uint32_t codesize = 0;
     for(uint8_t i = 0; i < 4; i++)
     {
-        strcpy(byteString,(char*)fbdo1.stringData().substring(i*2, i*2+2).c_str());
+        strcpy(byteString,(char*)fbdo.stringData().substring(i*2, i*2+2).c_str());
         header[cnt++] = x2i(byteString);
     }
     header[cnt++] = ESP_SEND_HEADER_FLAG;
-    Firebase.getInt(fbdo1, "/Firmware/Codesize") ;
-    codesize = fbdo1.intData();
+    Firebase.getInt(fbdo, "/Firmware/Codesize") ;
+    codesize = fbdo.intData();
     for(uint8_t i = 0; i < 4; i++)
     {
         header[cnt++] = codesize%100;
         codesize /=100;
     }
         
-    Firebase.getInt(fbdo1, "/Firmware/Appvermain") ;
-    header[cnt++] = fbdo1.intData();
-     Firebase.getInt(fbdo1, "/Firmware/Appversub") ;
-    header[cnt++] = fbdo1.intData();
+    Firebase.getInt(fbdo, "/Firmware/Appvermain") ;
+    header[cnt++] = fbdo.intData();
+    Firebase.getInt(fbdo, "/Firmware/Appversub") ;
+    header[cnt++] = fbdo.intData();
 
-    Firebase.getInt(fbdo1, "/Firmware/BW") ;
-    header[cnt++] = fbdo1.intData();
-     Firebase.getInt(fbdo1, "/Firmware/SF") ;
-    header[cnt++] = fbdo1.intData();
-     Firebase.getInt(fbdo1, "/Firmware/CR") ;
-    header[cnt++] = fbdo1.intData();
+    Firebase.getInt(fbdo, "/Firmware/BW") ;
+    header[cnt++] = fbdo.intData();
+    Firebase.getInt(fbdo, "/Firmware/SF") ;
+    header[cnt++] = fbdo.intData();
+    Firebase.getInt(fbdo, "/Firmware/CR") ;
+    header[cnt++] = fbdo.intData();
     Serial.println(header);
-    Serial.print("Get header 2: ");
-    Serial.println(ticks - xTaskGetTickCount());
+    // Serial.print("Get header 2: ");
+    // Serial.println(ticks - xTaskGetTickCount());
     return true;
 }
 
 
+// void FirebaseManager::updateStringFB(const char *data,const String &path)
+// {
+//     while((Firebase.setString(fbdo1, path, data)) == false)
+//     {
+//         vTaskDelay(100);
+//     }
+// }
+bool FirebaseManager::updateStringFB(FirebaseData& fbdo,const char *data, const String &path) {
+  if (Firebase.setString(fbdo, path, data)) {
+    Serial.println("Firebase update successful!");
+    return true;
+  } else {
+    Serial.printf("Firebase update failed: %s\n", fbdo.errorReason().c_str());
+    return false; 
+  }
+}
 
+void FirebaseManager::uploadDataSensor(UploadDataType_t type, const String &path, const char *data, FirebaseData& fbdo) {
 
-
-void FirebaseManager::uploadDataSensor(const char *data, FirebaseData& fbdo1) {
     
-    Serial.println("Starting Data Upload to Firebase");
-    
-    Serial.println(data);
-    // 1. Prepare Data
-    String data_str(data);
-    String data_deviece_id = data_str.substring(0, 4);
-    char device_id[9]; 
-    for (int i = 0; i < 4; i++) {
-        sprintf(&device_id[i * 2], "%02X", data_deviece_id[i]);
-    }
-    
-    //String path = sensorDataFirebaseFilePath + "/" + device_id + "/value";
-    String path = String(sensorDataFirebaseFilePath) + String(device_id) + "/value"; 
-    // Serial.println(device_id);
-    Serial.println(device_id);
-    uint8_t sensor_number = (data_str.length() - DEVICE_ID_SIZE) / DEVICE_SENSOR_DATA_FRAME_SIZE;
-    Serial.println(sensor_number);
-    char sensor_data_value[5]; // Buffer for formatted data
-
-    // 2. Upload to Firebase
-    
-    for (int i = 0; i < DEVICE_SENSOR_NUMBER_DEFAULT; i++) {
-        String valuePath = path + String(i + 1); // Create path for each value
-        // Serial.println(valuePath);
-        if (i + 1 <= sensor_number) {
-            // Extract and format the sensor value
-            String buffer_tmp = data_str.substring(DEVICE_SENSOR_DATA_FRAME_SIZE * i + DEVICE_ID_SIZE, DEVICE_SENSOR_DATA_FRAME_SIZE * i + DEVICE_ID_SIZE * DEVICE_SENSOR_DATA_FRAME_SIZE).c_str(); // Get 3 characters
-
-            if (buffer_tmp[0] == '1'-'0') { 
-                // Floating point value
-                sprintf(sensor_data_value, "%d.%02d", buffer_tmp[1], buffer_tmp[2]);
-            } else {
-                // ADC value
-                sprintf(sensor_data_value, "%02d%02d", buffer_tmp[1], buffer_tmp[2]);
-            }
-            
-            if(Firebase.setString(fbdo1, valuePath, sensor_data_value))
-                Serial.println("Success");
-            else 
-                Serial.println("Fail");
-        } else {
-            Firebase.setString(fbdo1, valuePath, "NA"); // No data for this sensor
+    if(type == SensorData)
+    {
+        Serial.println("Starting Data Upload to Firebase");
+        
+        Serial.println(data);
+        // 1. Prepare Data
+        String data_str(data);
+        String data_deviece_id = data_str.substring(0, 4);
+        char device_id[9]; 
+        for (int i = 0; i < 4; i++) {
+            sprintf(&device_id[i * 2], "%02X", data_deviece_id[i]);
         }
+        
+        //String path = sensorDataFirebaseFilePath + "/" + device_id + "/value";
+        String new_path = String(path) + String(device_id) + "/value"; 
+        // Serial.println(device_id);
+        Serial.println(device_id);
+        uint8_t sensor_number = (data_str.length() - DEVICE_ID_SIZE) / DEVICE_SENSOR_DATA_FRAME_SIZE;
+        Serial.println(sensor_number);
+        char sensor_data_value[5]; // Buffer for formatted data
+
+        // 2. Upload to Firebase
+        
+        for (int i = 0; i < DEVICE_SENSOR_NUMBER_DEFAULT; i++) {
+            String valuePath = new_path + String(i + 1); // Create path for each value
+            Serial.println(valuePath);
+            // Serial.println(valuePath);
+            if (i + 1 <= sensor_number) {
+                // Extract and format the sensor value
+                String buffer_tmp = data_str.substring(DEVICE_SENSOR_DATA_FRAME_SIZE * i + DEVICE_ID_SIZE, DEVICE_SENSOR_DATA_FRAME_SIZE * i + DEVICE_ID_SIZE * DEVICE_SENSOR_DATA_FRAME_SIZE).c_str(); // Get 3 characters
+
+                if (buffer_tmp[0] == '1'-'0') { 
+                    // Floating point value
+                    sprintf(sensor_data_value, "%d.%02d", buffer_tmp[1], buffer_tmp[2]);
+                } else {
+                    // ADC value
+                    sprintf(sensor_data_value, "%02d%02d", buffer_tmp[1], buffer_tmp[2]);
+                }
+                Serial.println("Wait for update");
+                if(Firebase.setString(fbdo, valuePath, sensor_data_value))
+                    Serial.println("Success");
+                else 
+                    Serial.println("Fail");
+            } else {
+                Firebase.setString(fbdo, valuePath, "NA"); // No data for this sensor
+            }
+        }
+
     }
-
-
 }
 void FirebaseManager::uploadDataSensorToFB(const String &path,uint8_t *sensor_number, uint16_t *sensor_data)    
 {
@@ -424,10 +425,11 @@ String FirebaseManager::parseSensorData(const String &data, uint8_t *sensor_numb
 }
 
 void FirebaseManager::updateSensorValues(FirebaseJson &json, uint8_t *sensor_number, const uint16_t *sensor_data) {
-    for(uint8_t i = 0; i < *sensor_number; i++)
-    {
-        json.set("value" + String(i+1), String(sensor_data[i]));
-    }
+    // for(uint8_t i = 0; i < *sensor_number; i++)
+    // {
+    //     Firebase.setString(fbdo, valuePath, "NA");
+    //     json.set("value" + String(i+1),VARIABLE_PATH, String(sensor_data[i]));
+    // }
 }
 
 
