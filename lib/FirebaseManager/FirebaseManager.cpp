@@ -169,6 +169,13 @@ bool FirebaseManager::getHeaderFrame(FirebaseData &fbdo)
     header[cnt++] = fbdo.intData();
     if(!Firebase.getInt(fbdo, "/Firmware/CR") ) success = 0;
     header[cnt++] = fbdo.intData();
+    if(!Firebase.getString(fbdo, "/Firmware/CRC") ) success = 0;
+
+    for(uint8_t i = 0; i < 4; i++)
+    {
+        strcpy(byteString,(char*)fbdo.stringData().substring(i*2, i*2+2).c_str());
+        header[cnt++] = x2i(byteString);
+    }
     Serial.println(header);
 
     return success;

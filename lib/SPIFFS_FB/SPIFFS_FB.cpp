@@ -83,9 +83,14 @@
         }
 
         String fileContent;
-        while (file.available()) {
-            // fileContent += (char)file.read();
-            Serial.write(file.read());
+        // while (file.available()) {
+        //     // fileContent += (char)file.read();
+        //     Serial.write(file.read());
+        // }
+
+        while(file.available()){
+            fileContent = file.readStringUntil('\n');
+            break;     
         }
         file.close();
         return fileContent;

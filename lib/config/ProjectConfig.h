@@ -1,7 +1,7 @@
 #ifndef __PROJECT_CONFIG_H
 #define __PROJECT_CONFIG_H
 
-#define BINH_WIFI 
+// #define BINH_WIFI 
 #define UART_REPLACE 
 
 
@@ -127,6 +127,11 @@
 
 #define MAX_CONNECT_TIME 5
 
+#define PARAM_INPUT_1  "ssid"
+#define PARAM_INPUT_2  "pass"
+#define PARAM_INPUT_3  "ip"
+#define PARAM_INPUT_4  "gateway"
+
 /* ===================================================================================== */
 
 
@@ -163,7 +168,7 @@
 #define FB_TIME_BEGIN_OTA "/Firmware/TimeBeginOTA"
 #define FB_TIME_FINISH_OTA "/Firmware/TimeFinishOTA"
 #define WIFI_TIME_CHECK "/DataSensor/TimeUpdate"
-#define HEADER_SIZE 16
+#define HEADER_SIZE 20
 
 
 #define START_UPDATE_FB_STATUS "true"

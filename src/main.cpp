@@ -20,7 +20,7 @@
 
 
 LittleFSManager spiffs_manager;
-MyWiFiManager wifi_manager(WIFI_SSID,WIFI_PASSWORD);
+MyWiFiManager wifi_manager(spiffs_manager);
 FirebaseManager fb_manager(wifi_manager,spiffs_manager);
 UARTManager uart_manager(fb_manager,UART);
 UpdateManager update_manager(uart_manager, "/firmware.bin", fb_manager, spiffs_manager);
