@@ -24,7 +24,16 @@
     }
 
 
+    void MyWiFiManager::settingIPAddress()
+    {
+        IPAddress localIP;
+        //IPAddress localIP(192, 168, 1, 200); // hardcoded
 
+        // Set your Gateway IP address
+        IPAddress localGateway;
+        //IPAddress localGateway(192, 168, 1, 1); //hardcoded
+        IPAddress subnet(255, 255, 0, 0);
+    }
     void MyWiFiManager::WiFiEvent(WiFiEvent_t event) {
         char dataToSend[1] = { 0xF1 };
         switch (event) {

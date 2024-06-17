@@ -189,7 +189,7 @@ void FirebaseManager::updateFirmwareTask(void* pvParameters) {
             do {
                 Serial.println("Start Get Header (Attempt " + String(retryCount + 1) + ")");
             } while (manager->getHeaderFrame(manager->fbdo1) && ++retryCount < MAX_RETRIES_DOWNLOAD_FW);
-            
+            spiffsManager.writeFile(headerFilePath,(uint8_t*) manager->header,HEADER_SIZE) ;
             // Serial.println(spiffsManager.isInitialized());
 
             String downloadURL = manager->getDownloadURLFromFirebase(); 
@@ -202,10 +202,12 @@ void FirebaseManager::updateFirmwareTask(void* pvParameters) {
                     Serial.println("Firmware update downloaded successfully!");
                     // transferFile(localFilePath); // Start firmware update process
                     // spiffsManager.readFile(localFilePath);
-                    manager->downloadCompleteAndReadyToFlash = true;
+                    
                     manager->setStringFB(manager->fbdo1, VARIABLE_PATH, F("updating"));
                     String curTime = manager->getCurrentTime();
                     manager->setStringFB(manager->fbdo1, FB_TIME_BEGIN_OTA, curTime);
+
+                    manager->downloadCompleteAndReadyToFlash = true;
                     //write success
                 } else {
                     Serial.println("Firmware download failed.");

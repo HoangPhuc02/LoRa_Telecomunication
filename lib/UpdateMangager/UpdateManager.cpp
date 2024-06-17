@@ -161,7 +161,10 @@ void UpdateManager::startFlashSw() {
 void UpdateManager::sendHeaderFile() {
     //uint8_t header[HEADER_SIZE];  // Assuming HEADER_SIZE is defined appropriately
     // Fill header with header data... 
-    uartManager.sendDataToUARTTx(firebaseManager.header, HEADER_SIZE );
+    uint8_t header[HEADER_SIZE];
+    File headerFile = spiffsManager.openFile(headerFilePath,"r");
+    headerFile.read(header,HEADER_SIZE);
+    uartManager.sendDataToUARTTx((char*)header, HEADER_SIZE );
     // QueueBufferItem_t queueItem;
     // memcpy(queueItem.data, firebaseManager.header, HEADER_SIZE);
     // queueItem.dataLength = HEADER_SIZE;
@@ -187,7 +190,9 @@ void UpdateManager::startSendFw() {
 void UpdateManager::transferFile(const char* filename) {
     
     QueueBufferItem_t queueItem;
-    
+    TickType_t startTime, endTime1, endTime2,endTime3;
+    double durationInSeconds;
+        
     uint8_t buffer[BUFFER_SIZE] = {0};
 
     // strcpy(uartManager.command , "");
@@ -198,21 +203,31 @@ void UpdateManager::transferFile(const char* filename) {
     int filesize = file.size();
     uint8_t cnt = 0;
     Serial.printf("Size of packet: %d",filesize);
-    while (file.read(buffer, BUFFER_SIZE) > 0) {
+    while (file.read(buffer, BUFFER_SIZE) > 0 && (startTime = xTaskGetTickCount())) {
+        
         filesize-=BUFFER_SIZE;
         Serial.printf("Sending packet number: %d",cnt++);  
         memcpy(queueItem.data, buffer, BUFFER_SIZE);
         queueItem.dataLength = BUFFER_SIZE;
-
+        endTime1 = xTaskGetTickCount();
+        durationInSeconds = (double)(endTime1 - startTime) / configTICK_RATE_HZ;
+        Serial.println("Read file time : " + String(durationInSeconds) + " seconds");
         if (xQueueSend(uartManager.tx_queue, &queueItem, pdMS_TO_TICKS(10)) != pdPASS) {
             Serial.println("Failed to send buffer to queue!");
         }
+        endTime2 = xTaskGetTickCount();
+        durationInSeconds = (double)(endTime2 - endTime1) / configTICK_RATE_HZ;
+        Serial.println("Sending packet request send : " + String(durationInSeconds) + " seconds");
+        
         if(filesize <= 0) 
         {
             // strcpy(uartManager.command , "");
             // strcpy(uartManager.command, (char*)MASTER_RECEIVE_ALL_MODE);
             Serial.println("Received all packets");
             uartManager.waitForCommandHex( MASTER_RECEIVE_ALL_MODE,0,DISABLE_TIME_OUT);
+            endTime3 = xTaskGetTickCount();
+            durationInSeconds = (double)(endTime3 - endTime2) / configTICK_RATE_HZ;
+            Serial.println("Sending packet time : " + String(durationInSeconds) + " seconds");
             break;
         }
         else 

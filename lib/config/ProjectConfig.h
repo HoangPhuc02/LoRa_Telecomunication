@@ -1,8 +1,8 @@
 #ifndef __PROJECT_CONFIG_H
 #define __PROJECT_CONFIG_H
 
-// #define BINH_WIFI 
-// #define UART_REPLACE 
+#define BINH_WIFI 
+#define UART_REPLACE 
 
 
 #include <Arduino.h>
@@ -132,8 +132,14 @@
 
 /* ===============================SPIFFS Mangager config================================ */
 
-#define localFilePath  "/firmware.bin"
-#define storeStateFilePath "/state.txt"
+#define localFilePath       "/firmware.bin"
+#define headerFilePath      "/header.txt"
+#define storeStateFilePath  "/state.txt"
+#define ssidPath            "/ssid.txt"
+#define passPath            "/pass.txt"
+#define ipPath              "/ip.txt"
+#define gatewayPath         "/gateway.txt"
+
 
 /* ===============================Firtbase Mangager config============================== */
 
