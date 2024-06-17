@@ -9,41 +9,38 @@
 
 class UpdateManager{
 public:
-    UpdateManager(UARTManager& uartManager, const char* SPIFFSFilePath, FirebaseManager& firebaseManager, SPIFFSManager& spiffsManager);
+    UpdateManager(UARTManager& uartManager, const char* LittleFSFilePath, FirebaseManager& firebaseManager, LittleFSManager& spiffsManager);
 
     void init();
 
     void updateDataFromUart(char* buffer, uint16_t size, char* command);
     void loop();
-    File file;
-private:
-    // enum UpdateMode {
-    //     STATE_IDLE,
-    //     /*FIRMWARE UPDATE*/
-    //     NEW_UPDATE_REQUEST_MODE,
-    //     NEW_UPDATE_REQUEST_ACCEPT_MODE,
-    //     ESP_SEND_NEXT_PACKET_MODE,
+    void setState(uint8_t stateSet);
+    uint8_t readState();
 
-    //     /*DATA UPDATE*/
-    //     // ... (add more modes if needed)
-    // };
+    void storeStateToLittleFS(uint8_t stateSet);
+    File file;
+
+private:
+
 
     UARTManager& uartManager;
     FirebaseManager& firebaseManager;
-    SPIFFSManager& spiffsManager;
-    const char* SPIFFSFilePath;
-    uint8_t mode = STATE_IDLE;
-    //uint8_t mode = NEW_UPDATE_REQUEST_MODE;
+    LittleFSManager& spiffsManager;
+    const char* LittleFSFilePath;
+    uint8_t state = STATE_IDLE;
+    //uint8_t mode =  ESP_SEND_NEXT_PACKET_MODE;
     //uint8_t mode = DONE_OTA_MODE;
+    //uint8_t mode = SET_DONE_OTA_MODE;
     bool ACP_KEY_RX = false;
-
+    
     static void updateTask(void* pvParameters);
-
     void waitStmAcpUpdateReq();
     void startFlashSw();
     void sendHeaderFile();
     void waitStmAcpHeader();
     void startSendFw();
+    void setStmOTADone();
     void waitStmOTADone();
     void transferFile(const char* filename);
 };

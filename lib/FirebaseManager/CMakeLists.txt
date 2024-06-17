@@ -5,8 +5,8 @@
 #     list(APPEND INCLUDES "i2cdev")
 # endif()
 
-idf_component_register(
-    SRCS "FirebaseManager.cpp" "UART.cpp"
-    INCLUDE_DIRS "include"
-    REQUIRES driver
-)
+# idf_component_register(
+#     SRCS "FirebaseManager.cpp" "UART.cpp"
+#     INCLUDE_DIRS "include"
+#     REQUIRES driver
+# )

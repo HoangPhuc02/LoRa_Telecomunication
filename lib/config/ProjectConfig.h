@@ -1,7 +1,8 @@
 #ifndef __PROJECT_CONFIG_H
 #define __PROJECT_CONFIG_H
-#define BINH_WIFI 
-#define UART_REPLACE 
+
+// #define BINH_WIFI 
+// #define UART_REPLACE 
 
 
 #include <Arduino.h>
@@ -13,6 +14,7 @@
 #include <string>
 #include <vector> 
 #include <cstring>
+#include <time.h>
 /* ================================Task RTOS Manager==================================== */
 /* OLD DEFINE */
 // #define RX_TASK_PRIORITY configMAX_PRIORITIES - 2
@@ -37,7 +39,7 @@
 
 /* NEW DEFINE */
 
-#define RX_TASK_PRIORITY configMAX_PRIORITIES
+#define RX_TASK_PRIORITY configMAX_PRIORITIES 
 #define TX_TASK_PRIORITY configMAX_PRIORITIES - 5
 #define UPDATE_TASK_LOOP_PRIORITY configMAX_PRIORITIES - 1
 #define FB_MONITOR_VALUE_PRORITY configMAX_PRIORITIES - 4
@@ -123,12 +125,15 @@
     // #define WIFI_PASSWORD "chaokhub"
 #endif
 
+#define MAX_CONNECT_TIME 5
+
 /* ===================================================================================== */
 
 
 /* ===============================SPIFFS Mangager config================================ */
 
 #define localFilePath  "/firmware.bin"
+#define storeStateFilePath "/state.txt"
 
 /* ===============================Firtbase Mangager config============================== */
 
@@ -149,6 +154,9 @@
 #define headerFirebaseFilePath "/Firmware"
 #define sensorDataFirebaseFilePath "/DataSensor/"
 
+#define FB_TIME_BEGIN_OTA "/Firmware/TimeBeginOTA"
+#define FB_TIME_FINISH_OTA "/Firmware/TimeFinishOTA"
+#define WIFI_TIME_CHECK "/DataSensor/TimeUpdate"
 #define HEADER_SIZE 16
 
 
@@ -163,6 +171,11 @@
 #define DEVICE_SENSOR_NUMBER_DEFAULT 4
 
 
+#define NTP_SERVER              "pool.ntp.org"
+#define GMT_OFFSET_SEC          25200 // + 7 (vn ) * 60 * 60 => SEC
+#define DAY_LIGHT_OFFSET_SEC    0
+
+#define MAX_RETRIES_DOWNLOAD_FW 3
 /* ===================================================================================== */
 
 /* ===============================Update Mangager config=============================== */
@@ -200,8 +213,10 @@
 #define ESP_SEND_NEXT_PACKET  		"ESP_SEND_NEXT_PACKET"
 #define ESP_SEND_NEXT_PACKET_MODE  		0x0AU
 
-#define DONE_OTA_MODE               0x7B
-#define FAIL_OTA_MODE               0xFB
+
+#define SET_DONE_OTA_MODE           0x7AU
+#define DONE_OTA_MODE               0x7BU
+#define FAIL_OTA_MODE               0xFBU
 /*CONFIRM DOWNLOADING DONE*/
 #define ESP_DOWNLOAD_DONE    		"ESP_DOWNLOAD_DONE"
 #define PACKET_1024bytes	 		1024U
@@ -210,6 +225,10 @@
 #define PACKET_64bytes				64U
 #define HEADER_CONFIG_SIZE 	 		16U
 
+
+/*WIFI */
+#define WiFI_CONNECT_LOSS           0xF0
+#define WiFI_CONNECT_SUCCESS        0xF1
 /* ===================================================================================== */
 #endif
 

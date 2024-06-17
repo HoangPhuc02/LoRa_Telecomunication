@@ -4,6 +4,7 @@
 /*Pin */
 #include <ProjectConfig.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 // #include <FirebaseClient.h>
 
 #include <FirebaseESP32.h>
@@ -12,14 +13,18 @@
 
 typedef void (*UARTDataSendFunc)(char*, uint32_t); 
 
-class WiFiManager {
+class MyWiFiManager {
 public:
-    WiFiManager(const char* ssid, const char* password );
+    MyWiFiManager(const char* ssid, const char* password );
 
     void begin() ;
 
     bool isConnected() ;
     void setOnDisconnectCallback(UARTDataSendFunc callback);
+
+    char dataToSend[1];
+    uint8_t connectionAttemptTime;
+    uint8_t wifiState;
 private:
     UARTDataSendFunc onDisconnectCallback;
     const char* _ssid;

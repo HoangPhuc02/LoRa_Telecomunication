@@ -34,7 +34,7 @@ void UARTHandler::uartTask(void *pvParameters) {
             switch(event.type) {
                 case UART_DATA:
                     len = uart_read_bytes(UART, data, event.size, portMAX_DELAY);
-                    Serial.write(data,len);
+                    // Serial.write(data,len);
                     // Handle received data here
                     break;
 
@@ -134,12 +134,12 @@ void UARTManager::rx_task(void* pvParameters) {
         // Serial.println("RX TASK");
         if (xQueueReceive(uart_manager->uart_queue, (void*)&event, (TickType_t)portMAX_DELAY)) {
             bzero(uart_manager->rxBuffer, RX_BUF_SIZE);
-            Serial.printf("uart[%d] event:", uart_manager->uart_num);
+            // Serial.printf("uart[%d] event:", uart_manager->uart_num);
             if (event.type == UART_DATA) {
-                Serial.printf("[UART DATA]: %d", event.size);
+                // Serial.printf("[UART DATA]: %d", event.size);
                 uart_read_bytes(uart_manager->uart_num, (uint8_t*)uart_manager->rxBuffer, event.size, portMAX_DELAY);
                 uart_manager->rxBufferSize = event.size;
-                Serial.printf("[DATA EVT]: %s", uart_manager->rxBuffer);
+                // Serial.printf("[DATA EVT]: %s", uart_manager->rxBuffer);
                 uart_manager->checkDataFromUart(uart_manager->rxBuffer, event.size); // Assuming commandRX is defined
             }
         }
@@ -154,6 +154,8 @@ int UARTManager::sendData(const uint8_t* data, size_t len) {
 }
 bool UARTManager::waitForCommandHex(uint8_t hexCommand, uint8_t hexCommand2,  uint8_t time_out_enable, uint32_t time_out)
 {
+    command[0] = 0;
+    command[1] = 0;
     command[0] = hexCommand;
     if(hexCommand2 != 0 ) command[1] = hexCommand2;
     //Serial.println(command);
@@ -175,9 +177,9 @@ bool UARTManager::waitForCommandHex(uint8_t hexCommand, uint8_t hexCommand2,  ui
         }
         return RECEIVE_SUCCESS;
     }
-    while (isReceveWrongCommand == false ) {
-        vTaskDelay(10/ portTICK_PERIOD_MS);
-    }
+    // while (isReceveWrongCommand == false ) {
+    //     vTaskDelay(10/ portTICK_PERIOD_MS);
+    // }
     // Serial.println("Correct Hex cmd");
     return RECEIVE_SUCCESS;
 
@@ -210,16 +212,18 @@ if check is equal to string need to modify this function
 */
 bool UARTManager::checkDataFromUart(char* buffer, uint16_t size) {
     Serial.println(buffer);
-    Serial.println(command[0]);
+    //Serial.println(command[0]);
     if(size == 1)
     {
         if( buffer[0] == command[0])
         {
+            // Serial.println("command 0");
             command[0] = 0;
             isReceveWrongCommand = true;
         }
         else if(command[1] != 0 && buffer[0] == command[1])
         {
+            // Serial.println("command 1");
             command[1] = 0;
             isReceveWrongCommand = true;
         }
@@ -229,7 +233,7 @@ bool UARTManager::checkDataFromUart(char* buffer, uint16_t size) {
         return CHECK_HEX;
     }
     else{
-        Serial.println("go to function");
+        // Serial.println("go to function");
         QueueUploadData_t queueUpload;
         //String data = (String(uartManager.rxBuffer)).substring(0,uartManager.rxBufferSize);
         queueUpload.type = SensorData;

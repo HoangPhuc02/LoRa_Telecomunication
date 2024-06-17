@@ -1,24 +1,8 @@
 #include "UpdateManager.h"
 
-// #define MASTER_ACCEPT_PACKET 0xA5
-// #define NEW_UPDATE_REQUEST_ACCEPT 0xA1
-// #define NEW_UPDATE_REQUEST 0xA0
 
-// ... (Include necessary headers)
-
-// static byte Node_Add = 1;
-// static byte Flag = HEADER_FLAG_FW_INFO;
-// static byte Size_SW[4] = {0x80,0x13,0x00,0x00};
-// static byte App_Main_Ver = 0x01;
-// static byte App_Sub_Ver = 0x00;
-// static byte Bandwidth = 0;
-// static byte SF = 0;
-// static byte CR = 0;
-// static byte reserve[5];
-// static char header[HEADER_SIZE] = {Node_Add,Flag,Size_SW[0],Size_SW[1],Size_SW[2],Size_SW[3],App_Main_Ver,App_Sub_Ver,Bandwidth,SF,CR};
-
-UpdateManager::UpdateManager(UARTManager& uartManager, const char* spiffsFilePath, FirebaseManager& firebaseManager, SPIFFSManager& spiffsManager)
-    : uartManager(uartManager), SPIFFSFilePath(spiffsFilePath), firebaseManager(firebaseManager), spiffsManager(spiffsManager) {}
+UpdateManager::UpdateManager(UARTManager& uartManager, const char* spiffsFilePath, FirebaseManager& firebaseManager, LittleFSManager& spiffsManager)
+    : uartManager(uartManager), LittleFSFilePath(spiffsFilePath), firebaseManager(firebaseManager), spiffsManager(spiffsManager) {}
 
 void UpdateManager::init() {
     xTaskCreate(updateTask, "update_task", 8192, this, UPDATE_TASK_LOOP_PRIORITY , UPDATE_TASK_LOOP_CORE);
@@ -34,14 +18,27 @@ void UpdateManager::updateTask(void* pvParameters) {
 }
 
 void UpdateManager::loop() {
-    
-    
-    switch (mode) {
+    switch (state) {
         case STATE_IDLE:
             if (firebaseManager.checkForFirmwareUpdate()) {
                 startFlashSw();
             }
-            
+            if(firebaseManager._wifiManager.wifiState == SYSTEM_EVENT_STA_GOT_IP)
+            {
+                if(firebaseManager._wifiManager.dataToSend[0] != WiFI_CONNECT_SUCCESS )
+                {
+                    firebaseManager._wifiManager.dataToSend[0] = WiFI_CONNECT_SUCCESS ;
+                    uartManager.sendDataToUARTTx(firebaseManager._wifiManager.dataToSend, 1);
+                }
+            } 
+            else if(firebaseManager._wifiManager.wifiState == SYSTEM_EVENT_STA_DISCONNECTED)
+            {
+                if(firebaseManager._wifiManager.dataToSend[0] != WiFI_CONNECT_LOSS )
+                {
+                    firebaseManager._wifiManager.dataToSend[0] = WiFI_CONNECT_LOSS ;
+                    uartManager.sendDataToUARTTx(firebaseManager._wifiManager.dataToSend, 1);
+                }
+            } 
             break;
         case NEW_UPDATE_REQUEST_MODE:
             Serial.println("NEW_UPDATE_REQUEST_MODE");
@@ -49,9 +46,11 @@ void UpdateManager::loop() {
             break;
 
         case ESP_SEND_HEADER_FLAG:
+            Serial.println("ESP_SEND_HEADER_FLAG");
             sendHeaderFile();
             break;
         case HEADER_FLAG_RECEIVED_MODE:
+            Serial.println("HEADER_FLAG_RECEIVED_MODE");
             waitStmAcpHeader();
             break;
 
@@ -59,14 +58,33 @@ void UpdateManager::loop() {
             Serial.println("ESP_SEND_NEXT_PACKET_MODE");
             startSendFw();
             break;
+        case SET_DONE_OTA_MODE:
+            setStmOTADone();
+            break;
         case DONE_OTA_MODE:
+            //Serial.println("DONE_OTA_MODE");
             waitStmOTADone();
             break;
         default:
             break;
     }
 }
+void UpdateManager::storeStateToLittleFS(uint8_t stateSet)
+{
+    while(spiffsManager.writeUint8(storeStateFilePath,stateSet) == false);
+}
 
+void UpdateManager::setState(uint8_t stateSet){
+    state = stateSet;
+    Serial.println("Current Satte : "+ String(state));
+}
+
+uint8_t UpdateManager::readState(){
+    uint8_t oldState;
+    while(spiffsManager.readUint8(storeStateFilePath,oldState) == false);
+    Serial.println("last state : " + String(oldState));
+    return oldState;
+}
 // ... (Implement other UpdateManager methods: waitStmAcpUpdateReq, startFlashSw, 
 // sendHeaderFile, startSendFw, transferFile as before, but using spiffsManager and uartManager)
 void UpdateManager::waitStmAcpHeader()
@@ -77,7 +95,9 @@ void UpdateManager::waitStmAcpHeader()
     if(uartManager.waitForCommandHex( HEADER_FLAG_RECEIVED_MODE,0))
     {
         Serial.println("HEADER_FLAG_RECEIVED_SUCCESS");
-        mode = ESP_SEND_NEXT_PACKET_MODE;
+
+        state = ESP_SEND_NEXT_PACKET_MODE;
+        //storeStateToLittleFS(state);
     }
     else 
         startFlashSw();
@@ -105,7 +125,9 @@ void UpdateManager::waitStmAcpUpdateReq() {
     if(uartManager.waitForCommandHex( NEW_UPDATE_REQUEST_ACCEPT_MODE,0) == RECEIVE_SUCCESS)
     {
         Serial.println("NEW_UPDATE_REQUEST_ACCEPT_MODE");
-        mode = ESP_SEND_HEADER_FLAG;
+
+        state = ESP_SEND_HEADER_FLAG;
+        // storeStateToLittleFS(state);
     }
     else startFlashSw();
 
@@ -131,7 +153,9 @@ void UpdateManager::startFlashSw() {
         }
     }
     Serial.println("Update requested");
-    mode = NEW_UPDATE_REQUEST_MODE;
+    
+    state = NEW_UPDATE_REQUEST_MODE;
+    storeStateToLittleFS(state);
 }
 
 void UpdateManager::sendHeaderFile() {
@@ -148,7 +172,8 @@ void UpdateManager::sendHeaderFile() {
     //         break;
     //     }
     // }
-    mode = HEADER_FLAG_RECEIVED_MODE;
+    state = HEADER_FLAG_RECEIVED_MODE;
+    // storeStateToLittleFS(state);
 }
 
 void UpdateManager::startSendFw() {
@@ -167,7 +192,7 @@ void UpdateManager::transferFile(const char* filename) {
 
     // strcpy(uartManager.command , "");
     // strcpy(uartManager.command, (char*)MASTER_ACCEPT_PACKET_MODE);
-    uartManager.waitForCommandHex(ESP_SEND_NEXT_PACKET_MODE,0,DISABLE_TIME_OUT);
+    uartManager.waitForCommandHex(ESP_SEND_NEXT_PACKET_MODE,ESP_SEND_NEXT_PACKET_MODE,ENABLE_TIME_OUT,10000);
 
     //startFlashSw();
     int filesize = file.size();
@@ -179,7 +204,7 @@ void UpdateManager::transferFile(const char* filename) {
         memcpy(queueItem.data, buffer, BUFFER_SIZE);
         queueItem.dataLength = BUFFER_SIZE;
 
-        if (xQueueSend(uartManager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS) {
+        if (xQueueSend(uartManager.tx_queue, &queueItem, pdMS_TO_TICKS(10)) != pdPASS) {
             Serial.println("Failed to send buffer to queue!");
         }
         if(filesize <= 0) 
@@ -203,24 +228,60 @@ void UpdateManager::transferFile(const char* filename) {
     firebaseManager.setDownloadCompleteAndReadyToFlash( false);
     file.close();
     Serial.println("\nEnd of file.");
-    mode = DONE_OTA_MODE;
-}
+    uartManager.isReceveWrongCommand = false;
 
+    state = SET_DONE_OTA_MODE;
+    storeStateToLittleFS(state);
+}
+void UpdateManager::setStmOTADone()
+{
+    uartManager.command[0] = DONE_OTA_MODE;
+    uartManager.command[1] = FAIL_OTA_MODE;
+    state = DONE_OTA_MODE;
+}
 void UpdateManager::waitStmOTADone()
 {
-    Serial.println("wait ota hex code");
-               
-    uartManager.waitForCommandHex(DONE_OTA_MODE,FAIL_OTA_MODE,DISABLE_TIME_OUT,2000) ;
-
+    //Serial.println("wait ota hex code");
+    //uartManager.isReceveWrongCommand = false;  
     
-    // Serial.println("before update firebase");
-    // firebaseManager.updateStringFB(firebaseManager.fbdo2,"done",VARIABLE_PATH);
-    // Serial.println("after update firebase");
-    if(uartManager.command[0] ==  0)
-    xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusDone,eSetValueWithOverwrite); 
-    else if(uartManager.command[1] == 0)
-    xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusFail,eSetValueWithOverwrite); 
+    //uartManager.waitForCommandHex(DONE_OTA_MODE,FAIL_OTA_MODE,DISABLE_TIME_OUT,2000) ;
+    // uartManager.command[0] = DONE_OTA_MODE;
+    // uartManager.command[1] = FAIL_OTA_MODE;
     
+        if(uartManager.isReceveWrongCommand == true)
+        {
+            
+            if(uartManager.command[0] ==  0)
+            {
+                Serial.printf("receive correct uart" + uartManager.isReceveWrongCommand);
+                xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusDone,eSetValueWithOverwrite); 
+            }
+            else if(uartManager.command[1] == 0)
+            {
+                Serial.printf("receive correct uart" + uartManager.isReceveWrongCommand);
+                xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusFail,eSetValueWithOverwrite); 
+                
+            }
+                
+            uartManager.isReceveWrongCommand = false;
+            state = STATE_IDLE;
+            storeStateToLittleFS(state);
+        }
+        if(firebaseManager._wifiManager.wifiState == SYSTEM_EVENT_STA_GOT_IP)
+        {
+            if(firebaseManager._wifiManager.dataToSend[0] != WiFI_CONNECT_SUCCESS )
+            {
+                firebaseManager._wifiManager.dataToSend[0] = WiFI_CONNECT_SUCCESS ;
+                uartManager.sendDataToUARTTx(firebaseManager._wifiManager.dataToSend, 1);
+            }
+        } 
+        else if(firebaseManager._wifiManager.wifiState == SYSTEM_EVENT_STA_DISCONNECTED)
+        {
+            if(firebaseManager._wifiManager.dataToSend[0] != WiFI_CONNECT_LOSS )
+            {
+                firebaseManager._wifiManager.dataToSend[0] = WiFI_CONNECT_LOSS ;
+                uartManager.sendDataToUARTTx(firebaseManager._wifiManager.dataToSend, 1);
+            }
+        }
     
-    mode = STATE_IDLE;
 }

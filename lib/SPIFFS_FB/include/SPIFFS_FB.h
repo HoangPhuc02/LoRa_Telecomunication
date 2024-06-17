@@ -1,26 +1,21 @@
-#ifndef __SPIFFS_FB_H
-#define __SPIFFS_FB_H
+#ifndef __LittleFS_FB_H
+#define __LittleFS_FB_H
 /** UART config*/
 /*Pin */
 #include <ProjectConfig.h>
 
 #include <FS.h>
 #include <WiFi.h>
-#include <FirebaseESP32.h>
-#include "SPIFFS.h"
+// #include <FirebaseESP32.h>
+// #include "SPIFFS.h"
+#include "LittleFS.h"
 #include <HTTPClient.h>
 #include <WiFiClient.h>
 
 
 
 
-
-bool setupSPIFFS();
-
-bool downloadFile(const String &downloadURL, const char *filename, int &len) ;
-
-
-class SPIFFSManager {
+class LittleFSManager {
 public:
     //SPIFFSManager() ;
     void begin();
@@ -31,7 +26,8 @@ public:
     String readFile(const String &filePath) ;
 
 
-
+    bool readUint8(const String &filePath, uint8_t &value);
+    bool writeUint8(const String &filePath, uint8_t value);
     bool downloadFile(const String &downloadURL, const char *filename) ;
 
     bool fileExists(const char* filePath) ;
