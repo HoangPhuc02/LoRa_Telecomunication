@@ -118,8 +118,14 @@ void UARTManager::tx_task(void* pvParameters) {
         // Serial.println("TX TASK");
         if (xQueueReceive(uart_manager->tx_queue, &receivedItem, portMAX_DELAY)) {
             // Serial.println("Transfer command");
+            // Test specific will be delete
+            // digitalWrite(PIN_CHECK_TIME,LOW);
+            //===============================
             uart_manager->sendData(receivedItem.data, receivedItem.dataLength);
-            vTaskDelay(2000 / portTICK_PERIOD_MS); // Adjust delay as needed
+            // Test specific will be delete
+            // digitalWrite(PIN_CHECK_TIME,HIGH);
+            //===============================
+            vTaskDelay(10 / portTICK_PERIOD_MS); // Adjust delay as needed
         }
     }
     vTaskDelete(NULL);
@@ -128,7 +134,7 @@ void UARTManager::tx_task(void* pvParameters) {
 void UARTManager::rx_task(void* pvParameters) {
     UARTManager* uart_manager = static_cast<UARTManager*>(pvParameters); // Get a reference to the object
     uart_event_t event;
-    
+
 
     for (;;) {
         // Serial.println("RX TASK");
@@ -137,6 +143,11 @@ void UARTManager::rx_task(void* pvParameters) {
             // Serial.printf("uart[%d] event:", uart_manager->uart_num);
             if (event.type == UART_DATA) {
                 // Serial.printf("[UART DATA]: %d", event.size);
+                // Test specific will be delete
+
+                // digitalWrite(PIN_CHECK_TIME,LOW);
+
+                //===============================
                 uart_read_bytes(uart_manager->uart_num, (uint8_t*)uart_manager->rxBuffer, event.size, portMAX_DELAY);
                 uart_manager->rxBufferSize = event.size;
                 // Serial.printf("[DATA EVT]: %s", uart_manager->rxBuffer);
@@ -147,11 +158,14 @@ void UARTManager::rx_task(void* pvParameters) {
     vTaskDelete(NULL);
 }
 
-int UARTManager::sendData(const uint8_t* data, size_t len) {
+int UARTManager::sendData(const uint8_t* data, size_t len) 
+{
     int txBytes = uart_write_bytes(uart_num, (const char*)data, len);
     // Serial.printf("Wrote %d bytes: %s", txBytes, data);
+
     return txBytes;
 }
+
 bool UARTManager::waitForCommandHex(uint8_t hexCommand, uint8_t hexCommand2,  uint8_t time_out_enable, uint32_t time_out)
 {
     command[0] = 0;
@@ -211,7 +225,8 @@ bool UARTManager::updateDataFromUart(char* buffer, uint16_t size, uint8_t* comma
 if check is equal to string need to modify this function
 */
 bool UARTManager::checkDataFromUart(char* buffer, uint16_t size) {
-    Serial.println(buffer);
+
+    // Serial.println(buffer);
     //Serial.println(command[0]);
     if(size == 1)
     {

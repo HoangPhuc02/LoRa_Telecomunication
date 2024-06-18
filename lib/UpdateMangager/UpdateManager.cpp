@@ -76,13 +76,23 @@ void UpdateManager::storeStateToLittleFS(uint8_t stateSet)
 
 void UpdateManager::setState(uint8_t stateSet){
     state = stateSet;
-    Serial.println("Current Satte : "+ String(state));
+    if(state == NEW_UPDATE_REQUEST_MODE)
+        Serial.println("Current state : " + String(NEW_UPDATE_REQUEST));
+    else if(state == STATE_IDLE)
+        Serial.println("Current state : STATE_IDLE" );
+    else if (state == SET_DONE_OTA_MODE)
+        Serial.println("Current state : WAIT_OTA_DONE" );
 }
 
 uint8_t UpdateManager::readState(){
     uint8_t oldState;
     while(spiffsManager.readUint8(storeStateFilePath,oldState) == false);
-    Serial.println("last state : " + String(oldState));
+    if(state == NEW_UPDATE_REQUEST_MODE)
+        Serial.println("Last state : " + String(NEW_UPDATE_REQUEST));
+    else if(state == STATE_IDLE)
+        Serial.println("Last state : STATE_IDLE" );
+    else if (state == SET_DONE_OTA_MODE)
+        Serial.println("Last state : WAIT_OTA_DONE" );
     return oldState;
 }
 // ... (Implement other UpdateManager methods: waitStmAcpUpdateReq, startFlashSw, 
@@ -137,7 +147,7 @@ void UpdateManager::waitStmAcpUpdateReq() {
 void UpdateManager::startFlashSw() {
     
     file = spiffsManager.openFile(localFilePath,"r");
-    Serial.printf("Size of packet: %d",file.size());
+    Serial.printf("Size of firmware: %d\n",file.size());
     QueueBufferItem_t queueItem;
     // memcpy(queueItem.data, (char*)NEW_UPDATE_REQUEST, sizeof(NEW_UPDATE_REQUEST));
     // queueItem.dataLength = sizeof(NEW_UPDATE_REQUEST);
@@ -184,15 +194,16 @@ void UpdateManager::startSendFw() {
     
     
     transferFile(localFilePath);
-    Serial.println("Update complete");
+    Serial.println("Download firmware complete");
 }
 
 void UpdateManager::transferFile(const char* filename) {
-    
+
     QueueBufferItem_t queueItem;
-    TickType_t startTime, endTime1, endTime2,endTime3;
-    double durationInSeconds;
-        
+    // Test specific will be delete
+    // digitalWrite(PIN_CHECK_STATE,HIGH);
+    // digitalWrite(PIN_CHECK_TIME,HIGH);
+    //====================================
     uint8_t buffer[BUFFER_SIZE] = {0};
 
     // strcpy(uartManager.command , "");
@@ -202,32 +213,40 @@ void UpdateManager::transferFile(const char* filename) {
     //startFlashSw();
     int filesize = file.size();
     uint8_t cnt = 0;
-    Serial.printf("Size of packet: %d",filesize);
-    while (file.read(buffer, BUFFER_SIZE) > 0 && (startTime = xTaskGetTickCount())) {
-        
+    Serial.printf("Size of packet: %d\n",filesize);
+
+    // while (file.read(buffer, BUFFER_SIZE) > 0 ) {
+    while (true){
+        // Test specific will be delete
+        // digitalWrite(PIN_CHECK_STATE,LOW);
+        // digitalWrite(PIN_CHECK_TIME,LOW);
+        //=====================================
+        size_t bytesRead = file.read(buffer, BUFFER_SIZE) ;
+        if(bytesRead <= 0) break;
+        //===============================
         filesize-=BUFFER_SIZE;
-        Serial.printf("Sending packet number: %d",cnt++);  
+        Serial.printf("Sending packet number: %d\n",cnt++);  
         memcpy(queueItem.data, buffer, BUFFER_SIZE);
         queueItem.dataLength = BUFFER_SIZE;
-        endTime1 = xTaskGetTickCount();
-        durationInSeconds = (double)(endTime1 - startTime) / configTICK_RATE_HZ;
-        Serial.println("Read file time : " + String(durationInSeconds) + " seconds");
+          // Test specific will be delete
+
+        // digitalWrite(PIN_CHECK_TIME,HIGH);
+        /*====================================*/
         if (xQueueSend(uartManager.tx_queue, &queueItem, pdMS_TO_TICKS(10)) != pdPASS) {
             Serial.println("Failed to send buffer to queue!");
         }
-        endTime2 = xTaskGetTickCount();
-        durationInSeconds = (double)(endTime2 - endTime1) / configTICK_RATE_HZ;
-        Serial.println("Sending packet request send : " + String(durationInSeconds) + " seconds");
-        
+        // // Test specific will be delete
+
+        // digitalWrite(PIN_CHECK_TIME,LOW);
+
+        // //===============================
         if(filesize <= 0) 
         {
             // strcpy(uartManager.command , "");
             // strcpy(uartManager.command, (char*)MASTER_RECEIVE_ALL_MODE);
             Serial.println("Received all packets");
             uartManager.waitForCommandHex( MASTER_RECEIVE_ALL_MODE,0,DISABLE_TIME_OUT);
-            endTime3 = xTaskGetTickCount();
-            durationInSeconds = (double)(endTime3 - endTime2) / configTICK_RATE_HZ;
-            Serial.println("Sending packet time : " + String(durationInSeconds) + " seconds");
+
             break;
         }
         else 
@@ -236,13 +255,17 @@ void UpdateManager::transferFile(const char* filename) {
             {
                 xQueueSend(uartManager.tx_queue, &queueItem, portMAX_DELAY) != pdPASS ;        
             }
+            /*Test specific will be delete*/
+            // digitalWrite(PIN_CHECK_STATE,HIGH);
+            // digitalWrite(PIN_CHECK_TIME,HIGH);
+            /*====================================*/
         }
          
     }
     
     firebaseManager.setDownloadCompleteAndReadyToFlash( false);
     file.close();
-    Serial.println("\nEnd of file.");
+    // Serial.println("\nEnd of file.");
     uartManager.isReceveWrongCommand = false;
 
     state = SET_DONE_OTA_MODE;
@@ -268,12 +291,12 @@ void UpdateManager::waitStmOTADone()
             
             if(uartManager.command[0] ==  0)
             {
-                Serial.printf("receive correct uart" + uartManager.isReceveWrongCommand);
+                Serial.println("OTA done" );
                 xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusDone,eSetValueWithOverwrite); 
             }
             else if(uartManager.command[1] == 0)
             {
-                Serial.printf("receive correct uart" + uartManager.isReceveWrongCommand);
+                Serial.println("OTA fail" );
                 xTaskNotify(firebaseManager.firebaseUploadTaskHandle,UpdateStatusFail,eSetValueWithOverwrite); 
                 
             }

@@ -31,3 +31,80 @@
   </div>
 </body>
 </html>
+
+
+<!-- <!DOCTYPE html>
+<html>
+<head>
+  <title>ESP Wi-Fi Manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>ESP Wi-Fi Manager</h1>
+        <form action="/" method="POST">
+          <p>
+            <label for="ssid">SSID:</label><br>
+            <input type="text" id="ssid" name="ssid" required><br>
+
+            
+
+            <label for="pass">Password:</label><br>
+            <input type="password" id="pass" name="pass" required><br>
+            <div id="passwordStrength"></div>
+
+            <label for="ip">IP Address:</label><br>
+            <input type="text" id="ip" name="ip" value="192.168.1.200" required><br>
+            <label for="gateway">Gateway Address:</label><br>
+            <input type="text" id="gateway" name="gateway" value="192.168.1.1" required><br>
+
+            <input type="submit" value="Submit">
+
+            <button id="scanButton" type="button">Scan for Networks</button>
+            <div id="networks"></div>
+          </p>
+        </form>
+    </div>
+
+    <script>
+        const scanButton = document.getElementById('scanButton');
+        const networksDiv = document.getElementById('networks');
+        const passwordInput = document.getElementById('pass');
+        const strengthIndicator = document.getElementById('passwordStrength');
+
+        scanButton.addEventListener('click', async () => {
+            const response = await fetch('/scan');
+            const networks = await response.json();
+
+            networksDiv.innerHTML = '';
+
+            networks.forEach(network => {
+                const item = document.createElement('div');
+                item.textContent = `${network.ssid} (${network.rssi})`;
+                item.classList.add('network-item'); // Add a class for styling
+                item.addEventListener('click', () => {
+                    document.getElementById('ssid').value = network.ssid;
+                });
+                networksDiv.appendChild(item);
+            });
+        });
+
+        passwordInput.addEventListener('input', () => {
+            const strength = calculatePasswordStrength(passwordInput.value);
+            strengthIndicator.textContent = `Password Strength: ${strength}`;
+            strengthIndicator.className = `strength-${strength.toLowerCase()}`; // Dynamically style
+        });
+
+        function calculatePasswordStrength(password) {
+            // Implement your password strength calculation logic here
+            // Example:
+            if (password.length < 8) return "Weak";
+            if (password.length < 12) return "Medium";
+            return "Strong";
+        }
+    </script>
+</body>
+</html>
+ -->

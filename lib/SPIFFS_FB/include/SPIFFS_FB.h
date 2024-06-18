@@ -22,7 +22,7 @@ public:
     bool isInitialized() ;
 
     bool writeFile(const String &filePath, const uint8_t *data, size_t length);
-
+    void removeFile(const String &filePath);
     String readFile(const String &filePath) ;
 
 

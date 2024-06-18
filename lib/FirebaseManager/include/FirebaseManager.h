@@ -128,6 +128,7 @@ private:
 
 
     bool downloadCompleteAndReadyToFlash = false; // Flag for download status
+    // Supend handling Firebase stream
 
     // Task for handling Firebase stream
     static void streamTask(void* pvParameters);

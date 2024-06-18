@@ -50,9 +50,9 @@ void MyWiFiManager::begin() {
     _ip      = _littlefsManager.readFile(ipPath);
     _gateway = _littlefsManager.readFile(gatewayPath);
     Serial.println(_ssid);
-    // Serial.println(_pass);
-    // Serial.println(_ip);
-    // Serial.println(_gateway);
+    Serial.println(_pass);
+    Serial.println(_ip);
+    Serial.println(_gateway);
     // Register event handler
     WiFi.onEvent([this](WiFiEvent_t event, WiFiEventInfo_t info) {
         WiFiEvent(event);
@@ -82,7 +82,20 @@ void MyWiFiManager::startWiFiManager()
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
         request->send(LittleFS, "/wifimanager.html", "text/html");
     });
-        
+    // ---------New change
+    // server.on("/scan", HTTP_GET, [this](AsyncWebServerRequest *request){
+    //     int n = WiFi.scanNetworks();
+    //     String json = "[";
+    //     for (int i = 0; i < n; ++i) {
+    //         json += "{";
+    //         json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+    //         json += "\"rssi\":" + String(WiFi.RSSI(i));
+    //         json += (i < n - 1) ? "}," : "}"; 
+    //     }
+    //     json += "]";
+    //     request->send(200, "application/json", json);
+    // });
+    // //------------------------------
     server.serveStatic("/", LittleFS, "/");
     
     server.on("/", HTTP_POST, [this](AsyncWebServerRequest *request) {

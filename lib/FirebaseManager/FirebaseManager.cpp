@@ -100,6 +100,10 @@ void FirebaseManager::streamTask(void* pvParameters) {
 void FirebaseManager::handleStreamData(FirebaseData& fbdo) {
     if (fbdo.dataType() == "string" && fbdo.stringData() == START_UPDATE_FB_STATUS) {
         Serial.println("Variable changed to true. Starting firmware update...");
+              /*Test specific will be delete*/
+            // digitalWrite(PIN_CHECK_STATE,LOW);
+            // digitalWrite(PIN_CHECK_TIME,LOW);
+            /*====================================*/
          // Suspend the task  
         xTaskCreatePinnedToCore(
             updateFirmwareTask,
@@ -113,9 +117,8 @@ void FirebaseManager::handleStreamData(FirebaseData& fbdo) {
 }
 String FirebaseManager::getDownloadURLFromFirebase() {
     if (Firebase.get(fbdo1, firebaseFilePath)) { 
-        Serial.println(fbdo1.dataType());
         if (fbdo1.dataType() == "string") {
-            Serial.println(fbdo1.stringData() );
+            // Serial.println(fbdo1.stringData() );
             return fbdo1.stringData();
         } else {
             Serial.println("ERROR: Data at Firebase path is not a string.");
@@ -132,7 +135,10 @@ String FirebaseManager::getDownloadURLFromFirebase() {
 }
 bool FirebaseManager::getHeaderFrame(FirebaseData &fbdo)
 {
-    Serial.println("Start Get Header");
+    /*Test specific will be delete*/
+    // digitalWrite(PIN_CHECK_TIME,HIGH);
+    /*====================================*/
+
     memset(header, 0, sizeof(header)); 
     uint8_t success = 1;
     char byteString[2] ;
@@ -176,8 +182,10 @@ bool FirebaseManager::getHeaderFrame(FirebaseData &fbdo)
         strcpy(byteString,(char*)fbdo.stringData().substring(i*2, i*2+2).c_str());
         header[cnt++] = x2i(byteString);
     }
-    Serial.println(header);
-
+    // Serial.println(header);
+    /*Test specific will be delete*/
+    // digitalWrite(PIN_CHECK_TIME,LOW);
+    /*====================================*/
     return success;
 
     // Serial.print("Get header 2: ");
@@ -205,7 +213,11 @@ void FirebaseManager::updateFirmwareTask(void* pvParameters) {
                 int fileLength = 0; // Not used in this case, as downloadFile handles it internally
                 Serial.println("Start Download FW Task");
                 // Use LittleFSManager to download and save the file
+                    /*Test specific will be delete*/
+                    // digitalWrite(PIN_CHECK_TIME,HIGH);
+                    /*====================================*/
                 if (spiffsManager.downloadFile(downloadURL, localFilePath)) {
+                    
                     Serial.println("Firmware update downloaded successfully!");
                     // transferFile(localFilePath); // Start firmware update process
                     // spiffsManager.readFile(localFilePath);
@@ -215,6 +227,11 @@ void FirebaseManager::updateFirmwareTask(void* pvParameters) {
                     manager->setStringFB(manager->fbdo1, FB_TIME_BEGIN_OTA, curTime);
 
                     manager->downloadCompleteAndReadyToFlash = true;
+                        /*Test specific will be delete*/
+                    // digitalWrite(PIN_CHECK_STATE,HIGH);
+                    // digitalWrite(PIN_CHECK_TIME,LOW);
+                
+                    /*====================================*/
                     //write success
                 } else {
                     Serial.println("Firmware download failed.");
@@ -319,30 +336,35 @@ bool FirebaseManager::setDownloadCompleteAndReadyToFlash(bool state)
 // }
 
 void FirebaseManager::uploadDataSensor(UploadDataType_t type, const String &path, const char *data,String &curTime , FirebaseData& fbdo) {
-    Serial.println("Starting Data Upload to Firebase");
+    
     
     // 1. Prepare Data
     String data_str(data);
     String data_deviece_id = data_str.substring(0, 4);
+    
     char device_id[9]; 
     for (int i = 0; i < 4; i++) {
         sprintf(&device_id[i * 2], "%02X", data_deviece_id[i]);
     }
+    if(strstr(device_id,"0000") != NULL) return;
     
     //String path = sensorDataFirebaseFilePath + "/" + device_id + "/value";
-    String new_path = String(path) + String(device_id) + "/value"; 
+    String new_path = String(path) + String(device_id) ; 
+    String sensor_path = new_path + "/value";
+    Serial.println("Starting Data Upload to Firebase");
     // Serial.println(device_id);
     Serial.println(device_id);
+    
     uint8_t sensor_number = (data_str.length() - DEVICE_ID_SIZE) / DEVICE_SENSOR_DATA_FRAME_SIZE;
-    Serial.println(sensor_number);
+    // Serial.println(sensor_number);
     char sensor_data_value[5]; // Buffer for formatted data
 
     // 2. Upload to Firebase
         
     for (int i = 0; i < DEVICE_SENSOR_NUMBER_DEFAULT; i++) {
-        String valuePath = new_path + String(i + 1); // Create path for each value
-        Serial.println(valuePath);
+        String valuePath = sensor_path + String(i + 1); // Create path for each value
         // Serial.println(valuePath);
+
         if (i + 1 <= sensor_number) {
             // Extract and format the sensor value
             String buffer_tmp = data_str.substring(DEVICE_SENSOR_DATA_FRAME_SIZE * i + DEVICE_ID_SIZE, DEVICE_SENSOR_DATA_FRAME_SIZE * i + DEVICE_ID_SIZE * DEVICE_SENSOR_DATA_FRAME_SIZE).c_str(); // Get 3 characters
@@ -363,9 +385,9 @@ void FirebaseManager::uploadDataSensor(UploadDataType_t type, const String &path
             setStringFB(fbdo, valuePath, F("NA")); // No data for this sensor
         }
     }
-    String valuePath = String(path) + String(device_id) + "/TimeUpdate";
+    String time_path = new_path + "/TimeUpdate";
        
-    setStringFB(fbdo, valuePath, curTime);
+    setStringFB(fbdo, time_path, curTime);
     setStringFB(fbdo, WIFI_TIME_CHECK, curTime);
 }
 

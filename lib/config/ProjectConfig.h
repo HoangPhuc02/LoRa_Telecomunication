@@ -1,8 +1,7 @@
 #ifndef __PROJECT_CONFIG_H
 #define __PROJECT_CONFIG_H
 
-// #define BINH_WIFI 
-#define UART_REPLACE 
+
 
 
 #include <Arduino.h>
@@ -15,7 +14,17 @@
 #include <vector> 
 #include <cstring>
 #include <time.h>
+/* ================================Project specific===================================== */
+
+// #define BINH_WIFI 
+#define UART_REPLACE 
+
+#define PIN_CHECK_STATE 16
+#define PIN_CHECK_TIME  17
 /* ================================Task RTOS Manager==================================== */
+
+
+
 /* OLD DEFINE */
 // #define RX_TASK_PRIORITY configMAX_PRIORITIES - 2
 // #define TX_TASK_PRIORITY configMAX_PRIORITIES - 3

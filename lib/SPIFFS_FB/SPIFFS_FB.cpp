@@ -40,7 +40,15 @@
     bool LittleFSManager::isInitialized() {
         return _initialized;
     }
-
+    void LittleFSManager::removeFile(const String &filePath)
+    {
+        Serial.printf("Removing Dir: %s\n", filePath);
+        if(LittleFS.remove(filePath)){
+            Serial.println("Dir removed");
+        } else {
+            Serial.println("rmdir failed");
+        }
+    }
     bool LittleFSManager::writeFile(const String &filePath, const uint8_t *data, size_t length) {
         if (!_initialized) {
             Serial.println("ERROR: LittleFS not initialized.");
@@ -95,6 +103,8 @@
         file.close();
         return fileContent;
     }
+
+
     bool LittleFSManager::writeUint8(const String &filePath, uint8_t value) {
         if (!_initialized) {
             Serial.println("ERROR: LittleFS not initialized.");

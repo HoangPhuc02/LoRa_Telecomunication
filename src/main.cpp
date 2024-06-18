@@ -19,6 +19,7 @@
 
 
 
+
 LittleFSManager spiffs_manager;
 MyWiFiManager wifi_manager(spiffs_manager);
 FirebaseManager fb_manager(wifi_manager,spiffs_manager);
@@ -28,9 +29,20 @@ UpdateManager update_manager(uart_manager, "/firmware.bin", fb_manager, spiffs_m
 void setup() {
 
   Serial.begin(115200);
-
+  pinMode(PIN_CHECK_STATE,OUTPUT);
+  pinMode(PIN_CHECK_TIME,OUTPUT);
+  // Test specific will be delete
+  digitalWrite(PIN_CHECK_STATE,HIGH);
+  digitalWrite(PIN_CHECK_TIME,HIGH);
+  //==============================
   uart_manager.init(); 
   spiffs_manager.begin();
+
+  // spiffs_manager.removeFile(storeStateFilePath);
+  // spiffs_manager.removeFile(ssidPath);
+  // spiffs_manager.removeFile(passPath);
+  // spiffs_manager.removeFile(ipPath);
+  // spiffs_manager.removeFile(gatewayPath);
   //wifi_manager.setOnDisconnectCallback(&UARTManager::sendDataToUARTTx);
   wifi_manager.dataToSend[0] = WiFI_CONNECT_LOSS ;
   uart_manager.sendDataToUARTTx(wifi_manager.dataToSend, 1);
@@ -45,8 +57,8 @@ void setup() {
   if(spiffs_manager.fileExists(storeStateFilePath))
   {
     Serial.println("State file exit");
-      uint8_t state = update_manager.readState();
-      update_manager.setState(state);
+    uint8_t state = update_manager.readState();
+    update_manager.setState(state);
   }
   else 
   {
@@ -54,6 +66,8 @@ void setup() {
     update_manager.setState(STATE_IDLE);
     update_manager.storeStateToLittleFS(STATE_IDLE);
   }
+  // update_manager.setState(STATE_IDLE);
+  // update_manager.storeStateToLittleFS(STATE_IDLE);
 
   update_manager.init();
   fb_manager.startMonitoringVariable();
